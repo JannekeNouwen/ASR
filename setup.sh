@@ -1,5 +1,6 @@
 # This setup follows the steps described in the speaker-anonymization repository
 # Make sure you have activated the correct environment before running this script
+# Make sure that you are okay with other repositories being cloned and installed in the folder above your ASR repository
 
 # First check if you are in the correct directory
 if ! pwd | grep -q '/ASR$'; then
