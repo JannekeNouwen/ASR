@@ -15,7 +15,7 @@ We have provided a bash script to perform the necessary steps to run the code in
 
 2. **Install Dependencies:**
 
-	Run setup.py: `bash setup.sh`
+	Run setup.sh: `bash setup.sh`
 	This script will:
 	- clone the SALT repository into the parent directory of your ASR repository.
 	- install necessary dependencies
