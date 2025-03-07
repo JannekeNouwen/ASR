@@ -4,6 +4,7 @@ import pickle
 from pathlib import Path
 
 import torch
+from anonymizer import Anonymizer
 from scipy.io.wavfile import write
 
 logging.basicConfig(level=logging.INFO)
@@ -13,7 +14,7 @@ input_wav_path = "/home/janneke/scripts/personal/ASR-stuff/data/emotions_dataset
 
 if not os.path.exists("anonymizer.pkl"):
     logging.info("Loading anonymizer from github")
-    anonymizer = torch.hub.load("BakerBunker/SALT", "salt", trust_repo=True, pretrained=True, base=True, device="cuda")
+    anonymizer: Anonymizer = torch.hub.load("BakerBunker/SALT", "salt", trust_repo=True, pretrained=True, base=True, device="cuda")
 
     logging.info("Adding speakers to anonymizer")
     for file in assets_path.glob("*.pack"):

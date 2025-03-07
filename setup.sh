@@ -22,13 +22,7 @@ git clone https://github.com/BakerBunker/SALT.git
 cd SALT/assets
 wget https://github.com/BakerBunker/SALT/releases/download/1.0.0/librispeech-pack.zip
 unzip librispeech-pack.zip
-cd ../../ASR
-
-
-# add anonymization/WGAN to python path
-# export PYTHONPATH=$(pwd)/anonymization/WGAN:$PYTHONPATH
-
-# echo Please add the following line to the file ~/.bashrc: "export PYTHONPATH=\$(pwd)/anonymization/WGAN:'\$PYTHONPATH"
-
+cd ../..
 
 echo "Setup complete"
+printf 'Please copy and paste the following line to the file ~/.bashrc (nano ~/.bashrc): \n export "PYTHONPATH=$PYTHONPATH:$(pwd)/SALT/anonymizer"\n'
