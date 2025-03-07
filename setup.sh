@@ -25,4 +25,4 @@ unzip librispeech-pack.zip
 cd ../..
 
 echo "Setup complete"
-printf 'Please copy and paste the following line to the file ~/.bashrc (nano ~/.bashrc): \n export "PYTHONPATH=$PYTHONPATH:$(pwd)/SALT/anonymizer"\n'
+printf 'Please copy and paste the following line to the file ~/.bashrc (nano ~/.bashrc): \n export "PYTHONPATH=$PYTHONPATH:$(pwd)/SALT"\n'

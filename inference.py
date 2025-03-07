@@ -5,9 +5,9 @@ from pathlib import Path
 
 import torch
 
-# If this does not work, make sure you added the anonymizer to your python path
+# If this does not work, make sure you added the SALT folder to your python path
 # like described at the bottom of setup.sh
-from anonymizer import Anonymizer
+from SALT.anonymizer import Anonymizer
 from scipy.io.wavfile import write
 
 logging.basicConfig(level=logging.INFO)
