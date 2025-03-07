@@ -4,6 +4,9 @@ import pickle
 from pathlib import Path
 
 import torch
+
+# If this does not work, make sure you added the anonymizer to your python path
+# like described at the bottom of setup.sh
 from anonymizer import Anonymizer
 from scipy.io.wavfile import write
 
