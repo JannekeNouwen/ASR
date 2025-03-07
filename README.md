@@ -13,7 +13,7 @@ We have provided a bash script to perform the necessary steps to run the code in
 
 	Make sure that you are okay with other repositories being cloned in the folder **above** your ASR repository
 
-2. **Install Dependencies:**
+2. **Run setup**
 
 	Run setup.sh: `bash setup.sh`
 	This script will:
@@ -21,7 +21,7 @@ We have provided a bash script to perform the necessary steps to run the code in
 	- install necessary dependencies
 	- download the necessary data.
 
-4. **Complete Setup:**
+4. **Complete setup**
 
 	After completing the setup, the script will prompt you to add the SALT directory to your `PYTHONPATH`. Please do this.
 	Run `source ~/.bashrc` to activate the changes
