@@ -18,12 +18,12 @@ git clone --recurse-submodules https://github.com/DigitalPhonetics/speaker-anony
 
 # Download models
 mkdir models
-wget https://github.com/DigitalPhonetics/IMS-Toucan/releases/download/v2.5/embedding_function.pt -P models/embedding_function.pt
-wget https://github.com/DigitalPhonetics/IMS-Toucan/releases/download/v2.5/embedding_gan.pt -P models/embedding_gan.pt
-wget https://github.com/DigitalPhonetics/IMS-Toucan/releases/download/v2.5/aligner.pt -P models/aligner.pt
-wget https://github.com/DigitalPhonetics/IMS-Toucan/releases/download/v2.5/ToucanTTS_Meta.pt -P models/ToucanTTS_Meta.pt
-wget https://github.com/DigitalPhonetics/IMS-Toucan/releases/download/v2.5/Avocodo.pt -P models/Avocodo.pt
-wget https://github.com/DigitalPhonetics/speaker-anonymization/releases/download/v2.0/asr_branchformer_tts-phn_en.zip -P models/asr_branchformer_tts-phn_en.zip
+wget https://github.com/DigitalPhonetics/IMS-Toucan/releases/download/v2.5/embedding_function.pt -P speaker-anonymization/models/
+wget https://github.com/DigitalPhonetics/IMS-Toucan/releases/download/v2.5/embedding_gan.pt -P speaker-anonymization/models/
+wget https://github.com/DigitalPhonetics/IMS-Toucan/releases/download/v2.5/aligner.pt -P speaker-anonymization/models/
+wget https://github.com/DigitalPhonetics/IMS-Toucan/releases/download/v2.5/ToucanTTS_Meta.pt -P speaker-anonymization/models/
+wget https://github.com/DigitalPhonetics/IMS-Toucan/releases/download/v2.5/Avocodo.pt -P speaker-anonymization/models/
+wget https://github.com/DigitalPhonetics/speaker-anonymization/releases/download/v2.0/asr_branchformer_tts-phn_en.zip -P speaker-anonymization/models/
 
 # Install requirements
 pip install -r speaker-anonymization/requirements.txt
@@ -46,7 +46,7 @@ else
     exit 1
 fi
 
-# Prepare the data information in kaldi format
+# Prepare the data information in kaldi format (TODO als ik de paden heb)
 # python run_prepare_data.py --mls_path <path-to-MLS-corpus> --cv_path <path-to-CV-corpus> --output_path <path-to-output-files>
 
 
