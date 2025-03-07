@@ -4,11 +4,11 @@ import pickle
 from pathlib import Path
 
 import torch
+from scipy.io.wavfile import write
 
 # If this does not work, make sure you added the SALT folder to your python path
 # like described at the bottom of setup.sh
 from SALT.anonymizer import Anonymizer
-from scipy.io.wavfile import write
 
 logging.basicConfig(level=logging.INFO)
 
