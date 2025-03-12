@@ -42,7 +42,7 @@ def main():
 
     model = load_model(num_labels=len(metadata["emotion_id"].unique()))
 
-    trainer = get_trainer(model, encoded_dataset, feature_extractor, use_wandb=use_wandb)
+    trainer = get_trainer(model, encoded_dataset, feature_extractor, use_wandb=use_wandb, model_dir=f"./models/{task}")
 
     output = trainer.evaluate(eval_dataset=encoded_dataset["test"])
     print(output)
@@ -121,6 +121,7 @@ def get_trainer(
     encoded_dataset: DatasetDict,
     feature_extractor: AutoFeatureExtractor,
     use_wandb: bool,
+    model_dir: str
 ) -> Trainer:
     if use_wandb:
         wandb.login()
@@ -130,7 +131,7 @@ def get_trainer(
     batch_size = 16
     epochs = 5
     training_args = TrainingArguments(
-        output_dir="./results",
+        output_dir=model_dir,
         evaluation_strategy="epoch",
         save_strategy="epoch",
         learning_rate=3e-5,
