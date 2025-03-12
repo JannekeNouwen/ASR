@@ -13,7 +13,9 @@ random.seed(42)
 
 
 def main():
-    # I hope that you only need to change these 3 variables to run this script
+    # First run create_emotion_df.py to create the metadata.csv file
+
+    # I hope that you only need to change these 3 variables to run this script:
     dataset_name = "crema_d"
     task = "emotion_recognition"
     use_wandb = True
