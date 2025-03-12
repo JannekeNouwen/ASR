@@ -25,4 +25,5 @@ unzip librispeech-pack.zip
 cd ../..
 
 echo "Setup complete"
-printf 'Please copy and paste the following line to the file ~/.bashrc (nano ~/.bashrc): \n export "PYTHONPATH=$PYTHONPATH:$(pwd)/SALT"\n'
+p=$(pwd)
+printf 'Please copy and paste the following line to the file ~/.bashrc (nano ~/.bashrc): \n export PYTHONPATH="$PYTHONPATH:%s/SALT"\n' "$p"
