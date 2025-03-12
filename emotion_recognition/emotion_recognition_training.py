@@ -4,9 +4,10 @@ import random
 import evaluate
 import numpy as np
 import pandas as pd
-import wandb
 from datasets import Audio, Dataset, DatasetDict, load_dataset
 from transformers import AutoFeatureExtractor, AutoModelForAudioClassification, Trainer, TrainingArguments
+
+import wandb
 
 # Set random state
 random.seed(42)
@@ -116,7 +117,10 @@ def compute_metrics(eval_preds):
 
 
 def get_trainer(
-    model: AutoModelForAudioClassification, encoded_dataset: DatasetDict, feature_extractor: AutoFeatureExtractor, use_wandb: bool
+    model: AutoModelForAudioClassification,
+    encoded_dataset: DatasetDict,
+    feature_extractor: AutoFeatureExtractor,
+    use_wandb: bool,
 ) -> Trainer:
     if use_wandb:
         wandb.login()
@@ -135,7 +139,7 @@ def get_trainer(
         per_device_eval_batch_size=8,
         report_to="wandb" if use_wandb else "none",
         logging_strategy="steps",
-        logging_steps=5890 * epochs / batch_size / 20
+        logging_steps=5890 * epochs / batch_size / 20,
     )
 
     return Trainer(
