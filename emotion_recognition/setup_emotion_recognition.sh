@@ -20,20 +20,22 @@ else
     exit 1
 fi
 
-# Download IEMOCAP dataset
-wget https://huggingface.co/datasets/Ar4ikov/iemocap_audio_text/blob/main/data/train-00000-of-00003-9213b91aae6dc76d.parquet
+# # Download IEMOCAP dataset
+# wget https://huggingface.co/datasets/Ar4ikov/iemocap_audio_text/blob/main/data/train-00000-of-00003-9213b91aae6dc76d.parquet
 
 
-# Install speechbrain
-pip install git+https://github.com/speechbrain/speechbrain.git@develop
+# # Install speechbrain
+# pip install git+https://github.com/speechbrain/speechbrain.git@develop
 
-# Clone the emotion recognition repository
-git clone git@hf.co:speechbrain/emotion-recognition-wav2vec2-IEMOCAP
-mv emotion-recognition-wav2vec2-IEMOCAP emotion_recognition_wav2vec
-cd emotion_recognition_wav2vec
-wget https://huggingface.co/speechbrain/emotion-recognition-wav2vec2-IEMOCAP/resolve/main/model.ckpt
-wget https://huggingface.co/speechbrain/emotion-recognition-wav2vec2-IEMOCAP/blob/main/wav2vec2.ckpt
-export PYTHONPATH=$PYTHONPATH:$(pwd)/emotion_recognition
+# # Clone the emotion recognition repository
+# git clone git@hf.co:speechbrain/emotion-recognition-wav2vec2-IEMOCAP
+# mv emotion-recognition-wav2vec2-IEMOCAP emotion_recognition_wav2vec
+# cd emotion_recognition_wav2vec
+# wget https://huggingface.co/speechbrain/emotion-recognition-wav2vec2-IEMOCAP/resolve/main/model.ckpt
+# wget https://huggingface.co/speechbrain/emotion-recognition-wav2vec2-IEMOCAP/blob/main/wav2vec2.ckpt
+# export PYTHONPATH=$PYTHONPATH:$(pwd)/emotion_recognition
 
-p=$(pwd)
-printf 'Please copy and paste the following line to the file ~/.bashrc (nano ~/.bashrc): \n export PYTHONPATH="$PYTHONPATH:%s/emotion_recognition_wav2vec"\n' "$p"
+# p=$(pwd)
+# printf 'Please copy and paste the following line to the file ~/.bashrc (nano ~/.bashrc): \n export PYTHONPATH="$PYTHONPATH:%s/emotion_recognition_wav2vec"\n' "$p"
+
+echo "Setup complete!"
