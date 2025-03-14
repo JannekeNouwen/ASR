@@ -1,72 +1,151 @@
+import json
+import logging
 import os
 import random
-
+from datetime import datetime
+import torch
 import evaluate
 import numpy as np
 import pandas as pd
-from datasets import Audio, Dataset, DatasetDict, load_dataset
+from datasets import Audio, Dataset, DatasetDict, load_dataset, load_from_disk
+from sklearn.metrics import precision_recall_fscore_support
 from transformers import AutoFeatureExtractor, AutoModelForAudioClassification, Trainer, TrainingArguments
 
 import wandb
 
 # Set random state
 random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
+
+logging.basicConfig(level=logging.INFO)
 
 
 def main():
     # First run create_emotion_df.py to create the metadata.csv file
 
-    # I hope that you only need to change these 3 variables to run this script:
+    # I hope that you only need to change these 4 variables to run this script:
     dataset_name = "crema_d"
     task = "emotion_recognition"
     use_wandb = True
+    use_cached_dataset = False
+    train_on = "normal"  # normal/anonymized  (Evaluation happens on both, independent of which set is trained on)
 
-    os.makedirs(f"./models/{task}", exist_ok=True)
+    print(f"Running training for task {task} with dataset {dataset_name}")
 
-    metadata, dataset = load_data(
-        f"./data/{dataset_name}/audiofiles",
-        metadata_csv_path=f"./data/{dataset_name}/metadata.csv",
-        label_column_name="emotion_id",
-        speaker_column_name="speaker",
-    )
+    metadata = pd.read_csv(f"./data/{task}/{dataset_name}/metadata.csv")
+    if use_cached_dataset:
+        logging.info("Loading cached dataset.")
+        train_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_normal_train.hf")
+        test_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_normal_test.hf")
+        dataset = DatasetDict({"train": train_dataset, "test": test_dataset})
 
-    unique_speakers = metadata["speaker"].unique()
+        logging.info("Loading cached dataset.")
+        anon_train_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_anonymized_train.hf")
+        anon_test_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_anonymized_test.hf")
+        anon_dataset = DatasetDict({"train": anon_train_dataset, "test": anon_test_dataset})
+    else:
+        logging.info("Loading dataset from audiofiles and metadata.")
+        os.makedirs(f"./models/{task}", exist_ok=True)
 
-    dataset = make_train_test_split(dataset, unique_speakers, split_ratio=0.8)
-    print(f"Number of training examples: {len(dataset['train'])}")
-    print(f"Number of testing examples: {len(dataset['test'])}")
+        metadata, dataset, anon_dataset = load_data(
+            f"./data/{task}/{dataset_name}/audiofiles",
+            metadata=metadata,
+            label_column_name="emotion_id",
+            speaker_column_name="speaker",
+        )
 
-    dataset.save_to_disk(f"./data/{dataset_name}/{dataset_name}.hf")
+        unique_speakers = metadata["speaker"].unique()
 
+        logging.info(f"Making train/test split.")
+        dataset, anon_dataset = make_train_test_split(
+            dataset, anon_dataset, unique_speakers, dataset_name=dataset_name, task=task, split_ratio=0.8
+        )
+        print(f"Number of training examples: {len(dataset['train'])}")
+        print(f"Number of testing examples: {len(dataset['test'])}")
+
+    logging.info(f"Extracting features.")
     encoded_dataset, feature_extractor = preprocess_dataset(dataset)
+    anon_encoded_dataset, _ = preprocess_dataset(dataset)
 
-    model = load_model(num_labels=len(metadata["emotion_id"].unique()))
+    num_labels = len(metadata["emotion_id"].unique())
+    logging.info(f"Loading model with {num_labels} output classes.")
+    model = load_model(num_labels=num_labels)
 
-    trainer = get_trainer(model, encoded_dataset, feature_extractor, use_wandb=use_wandb, model_dir=f"./models/{task}")
+    date_str = datetime.today().strftime("%Y-%m-%d-%H.%M")
 
-    output = trainer.evaluate(eval_dataset=encoded_dataset["test"])
-    print(output)
+    logging.info(f"Loading trainer.")
+    model_dir = f"./models/{task}/{train_on}-{date_str}"
+    os.makedirs(model_dir)
+    model_name = f"{task}-{dataset_name}-{train_on}-{date_str}"
 
+    if train_on == "normal":
+        trainer = get_trainer(
+            model, encoded_dataset, feature_extractor, use_wandb=use_wandb, model_dir=model_dir, run_name=model_name
+        )
+    else:
+        trainer = get_trainer(
+            model,
+            anon_encoded_dataset,
+            feature_extractor,
+            use_wandb=use_wandb,
+            model_dir=model_dir,
+            run_name=model_name,
+        )
+
+    logging.info(f"Training model.")
     trainer.train()
 
-    output = trainer.evaluate(eval_dataset=encoded_dataset["test"])
-    print(output)
+    evaluate_model(trainer=trainer, encoded_dataset=encoded_dataset, model_name=model_name, task=task)
+    evaluate_model(trainer=trainer, encoded_dataset=anon_encoded_dataset, model_name=model_name, task=task, anonymized=True)
 
+    logging.info(f"Saving model")
     trainer.save_model(f"./models/{task}")
 
 
+def evaluate_model(trainer: Trainer, encoded_dataset, model_name, task, anonymized=False):
+    # logging.info(f"Performing evaluation on train set.")
+    # output = trainer.evaluate(eval_dataset=encoded_dataset["train"])
+    # logging.info(f"Evaluation on train set: {output}")
+    # with open(
+    #     f"./models/{task}/{model_name}/train_set_metrics_{model_name}_on_eval_set_{'anonymized' if anonymized else 'normal'}.json",
+    #     "w",
+    # ) as file:
+    #     json.dump(output, file, indent=4)
+
+    logging.info(f"Performing evaluation on test set.")
+    output = trainer.evaluate(eval_dataset=encoded_dataset["test"])
+    logging.info(f"Evaluation on test set: {output}")
+    with open(
+        f"./models/{task}/{model_name}/test_set_metrics_{model_name}_on_eval_set_{'anonymized' if anonymized else 'normal'}.json",
+        "w",
+    ) as file:
+        json.dump(output, file, indent=4)
+
+
 def load_data(
-    audiofiles_dir: str, metadata_csv_path: str, label_column_name: str, speaker_column_name: str
+    audiofiles_dir: str, metadata: pd.DataFrame, label_column_name: str, speaker_column_name: str
 ) -> tuple[pd.DataFrame, Dataset]:
     dataset = load_dataset(audiofiles_dir, name="default", split="train")
-    metadata = pd.read_csv(metadata_csv_path)
+    anon_dataset = load_dataset(audiofiles_dir + "_anonymized", name="default", split="train")
+
     dataset = dataset.add_column(label_column_name, metadata[label_column_name])
+    anon_dataset = anon_dataset.add_column(label_column_name, metadata[label_column_name])
+
     dataset = dataset.add_column(speaker_column_name, metadata[speaker_column_name])
-    print(f"Example: {dataset[0]}")
-    return metadata, dataset
+    anon_dataset = anon_dataset.add_column(speaker_column_name, metadata[speaker_column_name])
+
+    return metadata, dataset, anon_dataset
 
 
-def make_train_test_split(dataset: Dataset, unique_speakers: np.ndarray, split_ratio: float = 0.8) -> DatasetDict:
+def make_train_test_split(
+    dataset: Dataset,
+    anon_dataset: Dataset,
+    unique_speakers: np.ndarray,
+    dataset_name: str,
+    task: str,
+    split_ratio: float = 0.8,
+) -> DatasetDict:
     # Shuffle speakers and split them into train and test
     random.shuffle(unique_speakers)
     split_ratio = 0.8  # 80% speakers for train, 20% for test
@@ -77,17 +156,28 @@ def make_train_test_split(dataset: Dataset, unique_speakers: np.ndarray, split_r
 
     # Apply filtering to create train and test sets
     train_set = dataset.filter(lambda example: example["speaker"] in train_speakers)
+    anon_train_set = anon_dataset.filter(lambda example: example["speaker"] in train_speakers)
     test_set = dataset.filter(lambda example: example["speaker"] in test_speakers)
+    anon_test_set = anon_dataset.filter(lambda example: example["speaker"] in test_speakers)
+
+    logging.info(f"Saving dataset to disk.")
+    train_set.save_to_disk(f"./data/{task}/{dataset_name}/{dataset_name}_normal_train.hf")
+    anon_train_set.save_to_disk(f"./data/{task}/{dataset_name}/{dataset_name}_anonymized_train.hf")
+    test_set.save_to_disk(f"./data/{task}/{dataset_name}/{dataset_name}_normal_test.hf")
+    anon_test_set.save_to_disk(f"./data/{task}/{dataset_name}/{dataset_name}_anonymized_test.hf")
+
+    dataset = DatasetDict({"train": train_set, "test": test_set})
+    anon_dataset = DatasetDict({"train": anon_train_set, "test": anon_test_set})
 
     # Verify no overlap
-    dataset = DatasetDict({"train": train_set, "test": test_set})
+    assert (
+        len(set(dataset["train"]["speaker"]).intersection(set(dataset["test"]["speaker"]))) == 0
+    ), "Speaker overlap detected between train and test!"
+    assert (
+        len(set(dataset["train"]["speaker"]).intersection(set(anon_dataset["test"]["speaker"]))) == 0
+    ), "Speaker overlap detected between train (normal) and test (anon)!"
 
-    assert len(set(dataset["train"]["speaker"]).intersection(set(dataset["test"]["speaker"]))) == 0, (
-        "Speaker overlap detected between train and test!"
-    )
-
-    # Combine into DatasetDict
-    return dataset
+    return dataset, anon_dataset
 
 
 def preprocess_dataset(dataset: DatasetDict) -> tuple[DatasetDict, AutoFeatureExtractor]:
@@ -110,10 +200,33 @@ def load_model(num_labels: int) -> AutoModelForAudioClassification:
 
 
 def compute_metrics(eval_preds):
-    metric = evaluate.load("accuracy")
+    metric_accuracy = evaluate.load("accuracy")
+    metric_precision = evaluate.load("precision")
+    metric_recall = evaluate.load("recall")
+    metric_f1 = evaluate.load("f1")
+
     logits, labels = eval_preds
     predictions = np.argmax(logits, axis=-1)
-    return metric.compute(predictions=predictions, references=labels)
+
+    # Compute metrics with macro averaging
+    accuracy = metric_accuracy.compute(predictions=predictions, references=labels)
+    precision = metric_precision.compute(predictions=predictions, references=labels, average="macro")
+    recall = metric_recall.compute(predictions=predictions, references=labels, average="macro")
+    f1 = metric_f1.compute(predictions=predictions, references=labels, average="macro")
+
+    # Optionally, calculate precision, recall, f1 per class using sklearn
+    # precision_per_class, recall_per_class, f1_per_class, _ = precision_recall_fscore_support(labels, predictions, average=None)
+
+    # Return the metrics in a dictionary
+    return {
+        "accuracy": accuracy["accuracy"],
+        "precision": precision["precision"],
+        "recall": recall["recall"],
+        "f1": f1["f1"],
+        # "precision_per_class": precision_per_class.tolist(),
+        # "recall_per_class": recall_per_class.tolist(),
+        # "f1_per_class": f1_per_class.tolist(),
+    }
 
 
 def get_trainer(
@@ -121,7 +234,8 @@ def get_trainer(
     encoded_dataset: DatasetDict,
     feature_extractor: AutoFeatureExtractor,
     use_wandb: bool,
-    model_dir: str
+    model_dir: str,
+    run_name: str,
 ) -> Trainer:
     if use_wandb:
         wandb.login()
@@ -129,18 +243,19 @@ def get_trainer(
         os.environ["WANDB_LOG_MODEL"] = "checkpoint"  # log all model checkpoints
 
     batch_size = 16
-    epochs = 5
+    epochs = 10
     training_args = TrainingArguments(
         output_dir=model_dir,
         evaluation_strategy="epoch",
         save_strategy="epoch",
-        learning_rate=3e-5,
+        learning_rate=1e-5,
         num_train_epochs=epochs,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=8,
         report_to="wandb" if use_wandb else "none",
+        run_name=run_name,
         logging_strategy="steps",
-        logging_steps=5890 * epochs / batch_size / 20,
+        logging_steps=int(len(encoded_dataset["train"]) * epochs / batch_size / 20),
     )
 
     return Trainer(

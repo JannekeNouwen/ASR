@@ -1,14 +1,14 @@
-torch==2.6.0
-torchaudio==2.6.0
-numpy==2.2.3
-gradio==5.20.1
-pandas==2.2.3
-scipy==1.15.2
-PySoundFile==0.9.0.post1
-transformers==4.49.0
-datasets==3.3.2
-librosa==0.11.0
-soundfile==0.13.1
-accelerate>=0.26.0
-evaluate==0.4.3
-wandb==0.19.8
+torch
+torchaudio
+# numpy==2.2.3
+# gradio
+pandas
+scipy
+PySoundFile
+transformers
+datasets
+librosa
+soundfile
+accelerate
+evaluate
+wandb

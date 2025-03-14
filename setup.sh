@@ -12,7 +12,6 @@ fi
 echo "This script will download the necessary files and install requirements for the speaker-anonymization repository"
 
 # Install some dependencies manually
-# and torch must be v2.0 or greater
 pip install -r requirements.txt
 
 
