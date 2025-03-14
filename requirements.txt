@@ -1,7 +1,5 @@
 torch
 torchaudio
-# numpy==2.2.3
-# gradio
 pandas
 scipy
 PySoundFile

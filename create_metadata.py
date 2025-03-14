@@ -1,12 +1,20 @@
 import glob
 
 import pandas as pd
+import json
 
 
 def main():
-    audiofiles_dir = "./data/crema_d/audiofiles/*.wav"
-    metadata = get_crema_metadata(audiofiles_dir)
-    metadata.to_csv("./data/crema_d/metadata.csv")
+    config_path = "ASR/configs/emotion_recognition.json"
+    with open(config_path, "r") as file:
+        config = json.load(file)
+    get_metadata(config)
+
+
+def get_metadata(task: str, dataset_name: str):
+    audiofiles_dir = f"./data/{task}/{dataset_name}/audiofiles/*.wav"
+    metadata = DATASET_TO_FUNC[dataset_name](audiofiles_dir)
+    metadata.to_csv(f"./data/{task}/{dataset_name}/metadata.csv")
 
 
 def get_crema_metadata(crema_dir: str) -> pd.DataFrame:
@@ -25,7 +33,7 @@ def get_crema_metadata(crema_dir: str) -> pd.DataFrame:
                 "emotion": emotion.lower(),
                 "emotion_level": emotion_level,
                 "sentence": sentence,
-                "emotion_id": unique_emotions[emotion],
+                "label_id": unique_emotions[emotion],
             }
         )
     return pd.DataFrame(data)
@@ -35,6 +43,8 @@ def get_naomis_metadata(naomis_dir: str) -> pd.DataFrame:
     files = glob.glob(naomis_dir)
     # TODO(Naomi): Write a function to parse the accents dataset to get the metadata
 
+
+DATASET_TO_FUNC = {"crema_d": get_crema_metadata, "naomi": get_naomis_metadata}
 
 if __name__ == "__main__":
     main()

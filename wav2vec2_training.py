@@ -21,17 +21,22 @@ torch.manual_seed(42)
 logging.basicConfig(level=logging.INFO)
 
 
-def main():
-    # First run create_emotion_df.py to create the metadata.csv file
+def train(config: dict, train_on: str) -> None:
+    """Train a wav2vec model for classification.
 
-    # I hope that you only need to change these 4 variables to run this script:
-    dataset_name = "crema_d"
-    task = "emotion_recognition"
-    use_wandb = True
-    use_cached_dataset = False
-    train_on = "normal"  # normal/anonymized  (Evaluation happens on both, independent of which set is trained on)
+    Args:
+        config: _description_
+        train_on: On which data to train. Choose one of normal/anonymized
+            (Evaluation happens on both, independent of which set is trained on)
+    """
+    # I hope that you only need to change these 5 variables to run this script:
+    dataset_name = config["dataset_name"]
+    task = config["task"]
+    use_wandb = config["use_wandb"]
+    use_cached_dataset = config["use_cached_dataset"]
+    # normal/anonymized  (Evaluation happens on both, independent of which set is trained on)
 
-    print(f"Running training for task {task} with dataset {dataset_name}")
+    print(f"Running training for task {task} ({train_on}) with dataset {dataset_name}")
 
     metadata = pd.read_csv(f"./data/{task}/{dataset_name}/metadata.csv")
     if use_cached_dataset:
@@ -51,7 +56,7 @@ def main():
         metadata, dataset, anon_dataset = load_data(
             f"./data/{task}/{dataset_name}/audiofiles",
             metadata=metadata,
-            label_column_name="emotion_id",
+            label_column_name="label_id",
             speaker_column_name="speaker",
         )
 
@@ -68,56 +73,69 @@ def main():
     encoded_dataset, feature_extractor = preprocess_dataset(dataset)
     anon_encoded_dataset, _ = preprocess_dataset(dataset)
 
-    num_labels = len(metadata["emotion_id"].unique())
+    num_labels = len(metadata["label_id"].unique())
     logging.info(f"Loading model with {num_labels} output classes.")
     model = load_model(num_labels=num_labels)
 
     date_str = datetime.today().strftime("%Y-%m-%d-%H.%M")
 
     logging.info(f"Loading trainer.")
-    model_dir = f"./models/{task}/{train_on}-{date_str}"
-    os.makedirs(model_dir)
     model_name = f"{task}-{dataset_name}-{train_on}-{date_str}"
+    model_dir = f"./models/{task}/{model_name}"
+    os.makedirs(model_dir)
 
     if train_on == "normal":
         trainer = get_trainer(
-            model, encoded_dataset, feature_extractor, use_wandb=use_wandb, model_dir=model_dir, run_name=model_name
-        )
-    else:
-        trainer = get_trainer(
-            model,
-            anon_encoded_dataset,
-            feature_extractor,
+            model=model,
+            encoded_dataset=encoded_dataset,
+            feature_extractor=feature_extractor,
             use_wandb=use_wandb,
             model_dir=model_dir,
             run_name=model_name,
+            batch_size=config["batch_size"],
+            epochs=config["epochs"],
+            learning_rate=config["learning_rate"],
+        )
+    else:
+        trainer = get_trainer(
+            model=model,
+            encoded_dataset=anon_encoded_dataset,
+            feature_extractor=feature_extractor,
+            use_wandb=use_wandb,
+            model_dir=model_dir,
+            run_name=model_name,
+            batch_size=config["batch_size"],
+            epochs=config["epochs"],
+            learning_rate=config["learning_rate"],
         )
 
     logging.info(f"Training model.")
     trainer.train()
 
     evaluate_model(trainer=trainer, encoded_dataset=encoded_dataset, model_name=model_name, task=task)
-    evaluate_model(trainer=trainer, encoded_dataset=anon_encoded_dataset, model_name=model_name, task=task, anonymized=True)
+    evaluate_model(
+        trainer=trainer, encoded_dataset=anon_encoded_dataset, model_name=model_name, task=task, anonymized=True
+    )
 
     logging.info(f"Saving model")
     trainer.save_model(f"./models/{task}")
 
 
 def evaluate_model(trainer: Trainer, encoded_dataset, model_name, task, anonymized=False):
-    # logging.info(f"Performing evaluation on train set.")
-    # output = trainer.evaluate(eval_dataset=encoded_dataset["train"])
-    # logging.info(f"Evaluation on train set: {output}")
-    # with open(
-    #     f"./models/{task}/{model_name}/train_set_metrics_{model_name}_on_eval_set_{'anonymized' if anonymized else 'normal'}.json",
-    #     "w",
-    # ) as file:
-    #     json.dump(output, file, indent=4)
+    logging.info(f"Performing evaluation on train set.")
+    output = trainer.evaluate(eval_dataset=encoded_dataset["train"], metric_key_prefix="train")
+    logging.info(f"Evaluation on train set: {output}")
+    with open(
+        f"./models/{task}/{model_name}/train_set_metrics_{model_name}_on_train_set_{'anonymized' if anonymized else 'normal'}.json",
+        "w",
+    ) as file:
+        json.dump(output, file, indent=4)
 
     logging.info(f"Performing evaluation on test set.")
     output = trainer.evaluate(eval_dataset=encoded_dataset["test"])
     logging.info(f"Evaluation on test set: {output}")
     with open(
-        f"./models/{task}/{model_name}/test_set_metrics_{model_name}_on_eval_set_{'anonymized' if anonymized else 'normal'}.json",
+        f"./models/{task}/{model_name}/test_set_metrics_{model_name}_on_test_set_{'anonymized' if anonymized else 'normal'}.json",
         "w",
     ) as file:
         json.dump(output, file, indent=4)
@@ -191,7 +209,7 @@ def preprocess_dataset(dataset: DatasetDict) -> tuple[DatasetDict, AutoFeatureEx
         )
 
     encoded_dataset = dataset.map(preprocess_function, remove_columns="audio", batched=True)
-    encoded_dataset = encoded_dataset.rename_column("emotion_id", "label")
+    encoded_dataset = encoded_dataset.rename_column("label_id", "label")
     return encoded_dataset, feature_extractor
 
 
@@ -236,19 +254,20 @@ def get_trainer(
     use_wandb: bool,
     model_dir: str,
     run_name: str,
+    batch_size: int = 16,
+    epochs: int = 10,
+    learning_rate: float = 3e-5
 ) -> Trainer:
     if use_wandb:
         wandb.login()
         os.environ["WANDB_PROJECT"] = "ASR2025"  # name your W&B project
         os.environ["WANDB_LOG_MODEL"] = "checkpoint"  # log all model checkpoints
 
-    batch_size = 16
-    epochs = 10
     training_args = TrainingArguments(
         output_dir=model_dir,
         evaluation_strategy="epoch",
         save_strategy="epoch",
-        learning_rate=1e-5,
+        learning_rate=learning_rate,
         num_train_epochs=epochs,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=8,
@@ -269,4 +288,4 @@ def get_trainer(
 
 
 if __name__ == "__main__":
-    main()
+    train()

@@ -23,5 +23,20 @@ wget https://github.com/BakerBunker/SALT/releases/download/1.0.0/librispeech-pac
 unzip librispeech-pack.zip
 cd ../..
 
+# Setup dataset for emotion recognition
+# Download Crema dataset
+# https://pmc.ncbi.nlm.nih.gov/articles/PMC4313618/
+url="https://www.kaggle.com/datasets/ejlok1/cremad"
+mkdir -p data/crema_d/audiofiles
+echo "Please download the dataset from: $url and place the unzipped audiofiles in $(pwd)/data/crema_d/audiofiles"
+read -p "Have you downloaded the dataset? (y/n): " response
+
+if [[ "$response" == "y" || "$response" == "Y" ]]; then
+    echo "Well done!"
+else
+    echo "Please download the dataset before continuing."
+    exit 1
+fi
+
 echo "Setup complete"
 printf 'Please copy and paste the following line to the file ~/.bashrc (nano ~/.bashrc): \n export "PYTHONPATH=$PYTHONPATH:$(pwd)/SALT"\n'

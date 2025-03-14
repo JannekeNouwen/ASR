@@ -19,7 +19,7 @@ def main():
     dataset_name = "crema_d"
 
     model = load_model()
-    anomymize(task_name, dataset_name, model)
+    anonymize(task_name, dataset_name, model)
 
 def load_model():
     assets_path = Path("./SALT/assets")
@@ -45,7 +45,7 @@ def load_model():
     return anonymizer
 
 
-def anomymize(task_name, dataset_name, model):
+def anonymize(task_name, dataset_name, model):
     output_dir = f"./data/{task_name}/{dataset_name}/audiofiles_anonymized"
     os.makedirs(output_dir, exist_ok=True)
     files = glob.glob(f"./data/{task_name}/{dataset_name}/audiofiles/*.wav")
