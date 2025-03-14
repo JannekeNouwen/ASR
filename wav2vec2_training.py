@@ -25,8 +25,8 @@ def train(config: dict, train_on: str) -> None:
     """Train a wav2vec model for classification.
 
     Args:
-        config: _description_
-        train_on: On which data to train. Choose one of normal/anonymized
+        config: config for training the model.
+        train_on: On which data to train. Choose one of normal/anonymized.
             (Evaluation happens on both, independent of which set is trained on)
     """
     # I hope that you only need to change these 5 variables to run this script:
@@ -34,7 +34,6 @@ def train(config: dict, train_on: str) -> None:
     task = config["task"]
     use_wandb = config["use_wandb"]
     use_cached_dataset = config["use_cached_dataset"]
-    # normal/anonymized  (Evaluation happens on both, independent of which set is trained on)
 
     print(f"Running training for task {task} ({train_on}) with dataset {dataset_name}")
 
@@ -71,7 +70,7 @@ def train(config: dict, train_on: str) -> None:
 
     logging.info(f"Extracting features.")
     encoded_dataset, feature_extractor = preprocess_dataset(dataset)
-    anon_encoded_dataset, _ = preprocess_dataset(dataset)
+    anon_encoded_dataset, _ = preprocess_dataset(anon_dataset)
 
     num_labels = len(metadata["label_id"].unique())
     logging.info(f"Loading model with {num_labels} output classes.")
@@ -232,18 +231,11 @@ def compute_metrics(eval_preds):
     recall = metric_recall.compute(predictions=predictions, references=labels, average="macro")
     f1 = metric_f1.compute(predictions=predictions, references=labels, average="macro")
 
-    # Optionally, calculate precision, recall, f1 per class using sklearn
-    # precision_per_class, recall_per_class, f1_per_class, _ = precision_recall_fscore_support(labels, predictions, average=None)
-
-    # Return the metrics in a dictionary
     return {
         "accuracy": accuracy["accuracy"],
         "precision": precision["precision"],
         "recall": recall["recall"],
         "f1": f1["f1"],
-        # "precision_per_class": precision_per_class.tolist(),
-        # "recall_per_class": recall_per_class.tolist(),
-        # "f1_per_class": f1_per_class.tolist(),
     }
 
 
