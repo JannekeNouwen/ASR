@@ -3,13 +3,17 @@ import logging
 import os
 import random
 from datetime import datetime
-import torch
+
 import evaluate
 import numpy as np
 import pandas as pd
+import torch
 from datasets import Audio, Dataset, DatasetDict, load_dataset, load_from_disk
-from sklearn.metrics import precision_recall_fscore_support
-from transformers import AutoFeatureExtractor, AutoModelForAudioClassification, Trainer, TrainingArguments
+from sklearn.metrics import mean_squared_error, precision_recall_fscore_support
+from tqdm import tqdm
+from transformers import (AutoFeatureExtractor,
+                          AutoModelForAudioClassification, Trainer,
+                          TrainingArguments)
 
 import wandb
 
@@ -22,18 +26,20 @@ logging.basicConfig(level=logging.INFO)
 
 
 def train(config: dict, train_on: str) -> None:
-    """Train a wav2vec model for classification.
+    """Train a wav2vec model for classification or regression.
 
     Args:
         config: config for training the model.
         train_on: On which data to train. Choose one of normal/anonymized.
             (Evaluation happens on both, independent of which set is trained on)
     """
-    # I hope that you only need to change these 5 variables to run this script:
     dataset_name = config["dataset_name"]
     task = config["task"]
     use_wandb = config["use_wandb"]
     use_cached_dataset = config["use_cached_dataset"]
+    match_metadata_on_filename = config["match_metadata_on_filename"]
+    regression = config["regression"]
+    label_column_name = config["label_column_name"]
 
     print(f"Running training for task {task} ({train_on}) with dataset {dataset_name}")
 
@@ -55,8 +61,9 @@ def train(config: dict, train_on: str) -> None:
         metadata, dataset, anon_dataset = load_data(
             f"./data/{task}/{dataset_name}/audiofiles",
             metadata=metadata,
-            label_column_name="label_id",
+            label_column_name=label_column_name,
             speaker_column_name="speaker",
+            match_metadata_on_filename=match_metadata_on_filename
         )
 
         unique_speakers = metadata["speaker"].unique()
@@ -69,12 +76,16 @@ def train(config: dict, train_on: str) -> None:
         print(f"Number of testing examples: {len(dataset['test'])}")
 
     logging.info(f"Extracting features.")
-    encoded_dataset, feature_extractor = preprocess_dataset(dataset)
-    anon_encoded_dataset, _ = preprocess_dataset(anon_dataset)
+    encoded_dataset, feature_extractor = preprocess_dataset(dataset, label_column_name)
+    anon_encoded_dataset, _ = preprocess_dataset(anon_dataset, label_column_name)
 
-    num_labels = len(metadata["label_id"].unique())
-    logging.info(f"Loading model with {num_labels} output classes.")
-    model = load_model(num_labels=num_labels)
+    if regression:
+        logging.info(f"Loading model for regression.")
+        model = load_model(num_labels=1)
+    else:
+        logging.info(f"Loading model with {num_labels} output classes.")
+        num_labels = len(metadata["label_id"].unique())
+        model = load_model(num_labels=num_labels)
 
     date_str = datetime.today().strftime("%Y-%m-%d-%H.%M")
 
@@ -91,6 +102,7 @@ def train(config: dict, train_on: str) -> None:
             use_wandb=use_wandb,
             model_dir=model_dir,
             run_name=model_name,
+            compute_metrics=compute_metrics_regression if regression else compute_metrics_classification,
             batch_size=config["batch_size"],
             epochs=config["epochs"],
             learning_rate=config["learning_rate"],
@@ -103,10 +115,16 @@ def train(config: dict, train_on: str) -> None:
             use_wandb=use_wandb,
             model_dir=model_dir,
             run_name=model_name,
+            compute_metrics=compute_metrics_regression if regression else compute_metrics_classification,
             batch_size=config["batch_size"],
             epochs=config["epochs"],
             learning_rate=config["learning_rate"],
         )
+
+    evaluate_model(trainer=trainer, encoded_dataset=encoded_dataset, model_name=model_name, task=task)
+    evaluate_model(
+        trainer=trainer, encoded_dataset=anon_encoded_dataset, model_name=model_name, task=task, anonymized=True
+    )
 
     logging.info(f"Training model.")
     trainer.train()
@@ -122,7 +140,7 @@ def train(config: dict, train_on: str) -> None:
 
 def evaluate_model(trainer: Trainer, encoded_dataset, model_name, task, anonymized=False):
     logging.info(f"Performing evaluation on train set.")
-    output = trainer.evaluate(eval_dataset=encoded_dataset["train"], metric_key_prefix="train")
+    output = trainer.evaluate(eval_dataset=encoded_dataset["train"], metric_key_prefix=f"train/{'anonymized' if anonymized else 'normal'}")
     logging.info(f"Evaluation on train set: {output}")
     with open(
         f"./models/{task}/{model_name}/train_set_metrics_{model_name}_on_train_set_{'anonymized' if anonymized else 'normal'}.json",
@@ -131,7 +149,7 @@ def evaluate_model(trainer: Trainer, encoded_dataset, model_name, task, anonymiz
         json.dump(output, file, indent=4)
 
     logging.info(f"Performing evaluation on test set.")
-    output = trainer.evaluate(eval_dataset=encoded_dataset["test"])
+    output = trainer.evaluate(eval_dataset=encoded_dataset["test"], metric_key_prefix=f"eval/{'anonymized' if anonymized else 'normal'}")
     logging.info(f"Evaluation on test set: {output}")
     with open(
         f"./models/{task}/{model_name}/test_set_metrics_{model_name}_on_test_set_{'anonymized' if anonymized else 'normal'}.json",
@@ -141,11 +159,25 @@ def evaluate_model(trainer: Trainer, encoded_dataset, model_name, task, anonymiz
 
 
 def load_data(
-    audiofiles_dir: str, metadata: pd.DataFrame, label_column_name: str, speaker_column_name: str
+    audiofiles_dir: str, metadata: pd.DataFrame, label_column_name: str, speaker_column_name: str, match_metadata_on_filename: False
 ) -> tuple[pd.DataFrame, Dataset]:
     dataset = load_dataset(audiofiles_dir, name="default", split="train")
     anon_dataset = load_dataset(audiofiles_dir + "_anonymized", name="default", split="train")
 
+    # if match_metadata_on_filename:
+    #     dataset = dataset.add_column(label_column_name, metadata[label_column_name])
+    #     anon_dataset = anon_dataset.add_column(label_column_name, [0]*len(anon_dataset))
+
+    #     dataset = dataset.add_column(speaker_column_name, [0]*len(anon_dataset))
+    #     anon_dataset = anon_dataset.add_column(speaker_column_name, [0]*len(anon_dataset))
+
+        # for i in tqdm(range(len(dataset)), total=len(dataset)):
+        #     dataset[i][label_column_name] = metadata.loc[metadata['audio_path'] == dataset[i]["audio"]["path"]][label_column_name]
+        #     anon_dataset[i][label_column_name] = metadata.loc[metadata['audio_path'] == anon_dataset[i]["audio"]["path"]][label_column_name]
+
+        #     dataset[i][speaker_column_name] = metadata.loc[metadata['audio_path'] == dataset[i]["audio"]["path"]][speaker_column_name]
+        #     anon_dataset[i][speaker_column_name] = metadata.loc[metadata['audio_path'] == anon_dataset[i]["audio"]["path"]][speaker_column_name]
+    # else:
     dataset = dataset.add_column(label_column_name, metadata[label_column_name])
     anon_dataset = anon_dataset.add_column(label_column_name, metadata[label_column_name])
 
@@ -197,8 +229,8 @@ def make_train_test_split(
     return dataset, anon_dataset
 
 
-def preprocess_dataset(dataset: DatasetDict) -> tuple[DatasetDict, AutoFeatureExtractor]:
-    dataset = dataset.cast_column("audio", Audio(sampling_rate=16_000))
+def preprocess_dataset(dataset: DatasetDict, label_column_name) -> tuple[DatasetDict, AutoFeatureExtractor]:
+    dataset = dataset.cast_column("audio", Audio(sampling_rate=16_000),)
     feature_extractor = AutoFeatureExtractor.from_pretrained("facebook/wav2vec2-base")
 
     def preprocess_function(examples: dict) -> dict:
@@ -208,15 +240,15 @@ def preprocess_dataset(dataset: DatasetDict) -> tuple[DatasetDict, AutoFeatureEx
         )
 
     encoded_dataset = dataset.map(preprocess_function, remove_columns="audio", batched=True)
-    encoded_dataset = encoded_dataset.rename_column("label_id", "label")
+    encoded_dataset = encoded_dataset.rename_column(label_column_name, "label")
     return encoded_dataset, feature_extractor
 
 
 def load_model(num_labels: int) -> AutoModelForAudioClassification:
-    return AutoModelForAudioClassification.from_pretrained("facebook/wav2vec2-base", num_labels=num_labels)
+    return AutoModelForAudioClassification.from_pretrained("facebook/wav2vec2-base", num_labels=num_labels, ignore_mismatched_sizes=True)
 
 
-def compute_metrics(eval_preds):
+def compute_metrics_classification(eval_preds):
     metric_accuracy = evaluate.load("accuracy")
     metric_precision = evaluate.load("precision")
     metric_recall = evaluate.load("recall")
@@ -238,6 +270,24 @@ def compute_metrics(eval_preds):
         "f1": f1["f1"],
     }
 
+def compute_metrics_regression(eval_preds):
+    metric_mse = evaluate.load("mse")
+    metric_mae = evaluate.load("mae")
+    metric_r2 = evaluate.load("r_squared")
+    
+    predictions, labels = eval_preds  # No argmax, as outputs are continuous
+    
+    # Compute regression metrics
+    mse = metric_mse.compute(predictions=predictions, references=labels)
+    mae = metric_mae.compute(predictions=predictions, references=labels)
+    r2 = metric_r2.compute(predictions=predictions, references=labels)
+
+    return {
+        "mse": mse["mse"],
+        "mae": mae["mae"],
+        "r2": r2["r_squared"],
+    }
+
 
 def get_trainer(
     model: AutoModelForAudioClassification,
@@ -246,6 +296,7 @@ def get_trainer(
     use_wandb: bool,
     model_dir: str,
     run_name: str,
+    compute_metrics,
     batch_size: int = 16,
     epochs: int = 10,
     learning_rate: float = 3e-5
@@ -253,7 +304,6 @@ def get_trainer(
     if use_wandb:
         wandb.login()
         os.environ["WANDB_PROJECT"] = "ASR2025"  # name your W&B project
-        os.environ["WANDB_LOG_MODEL"] = "checkpoint"  # log all model checkpoints
 
     training_args = TrainingArguments(
         output_dir=model_dir,

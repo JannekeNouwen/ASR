@@ -28,7 +28,20 @@ cd ../..
 # https://pmc.ncbi.nlm.nih.gov/articles/PMC4313618/
 url="https://www.kaggle.com/datasets/ejlok1/cremad"
 mkdir -p data/crema_d/audiofiles
-echo "Please download the dataset from: $url and place the unzipped audiofiles in $(pwd)/data/crema_d/audiofiles"
+echo "Please download the dataset from: $url and place the unzipped audiofiles in $(pwd)/data/emotion_recognition/crema_d/audiofiles"
+read -p "Have you downloaded the dataset? (y/n): " response
+
+if [[ "$response" == "y" || "$response" == "Y" ]]; then
+    echo "Well done!"
+else
+    echo "Please download the dataset before continuing."
+    exit 1
+fi
+
+# Setup dataset for gender recognition
+url="https://www.kaggle.com/datasets/ogechukwu/voice/data"
+mkdir -p data/crema_d/audiofiles
+echo "Please download the dataset from: $url and place the unzipped audiofiles in the folder one_sentence/one_sentence in $(pwd)/data/gender_recognition/bvc_one_sentence/audiofiles"
 read -p "Have you downloaded the dataset? (y/n): " response
 
 if [[ "$response" == "y" || "$response" == "Y" ]]; then

@@ -5,5 +5,8 @@
     "use_cached_dataset": true,
     "batch_size": 16,
     "epochs": 10,
-    "learning_rate": 3e-5
+    "learning_rate": 3e-5,
+    "match_metadata_on_filename": false,
+    "regression": false
+
 }
