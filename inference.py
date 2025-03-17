@@ -2,9 +2,10 @@ import logging
 import os
 import pickle
 from pathlib import Path
-
+import glob
 import torch
 from scipy.io.wavfile import write
+from tqdm import tqdm
 
 # If this does not work, make sure you added the SALT folder to your python path
 # like described at the bottom of setup.sh
@@ -12,37 +13,54 @@ from SALT.anonymizer import Anonymizer
 
 logging.basicConfig(level=logging.INFO)
 
-assets_path = Path("/home/janneke/scripts/personal/ASR-stuff/SALT/assets")
-input_wav_path = "/home/janneke/scripts/personal/ASR-stuff/data/emotions_dataset/Crema/1001_DFA_ANG_XX.wav"
 
-if not os.path.exists("anonymizer.pkl"):
-    logging.info("Loading anonymizer from github")
-    anonymizer: Anonymizer = torch.hub.load("BakerBunker/SALT", "salt", trust_repo=True, pretrained=True, base=True, device="cuda")
+def main():
+    task_name = "emotion_recognition"
+    dataset_name = "crema_d"
 
-    logging.info("Adding speakers to anonymizer")
-    for file in assets_path.glob("*.pack"):
-        print(file.stem)
-        anonymizer.add_speaker(name=file.stem, preprocessed_file=file)
+    model = load_model()
+    anonymize(task_name, dataset_name, model)
 
-    # pickle anonymizer
-    with open("anonymizer.pkl", "wb") as f:
-        pickle.dump(anonymizer, f)
+def load_model():
+    assets_path = Path("./SALT/assets")
 
-else:
-    logging.info("Loading anonymizer from pickle")
-    with open("anonymizer.pkl", "rb") as f:
-        anonymizer = pickle.load(f)
+    if not os.path.exists("anonymizer.pkl"):
+        logging.info("Loading anonymizer from github")
+        anonymizer: Anonymizer = torch.hub.load("BakerBunker/SALT", "salt", trust_repo=True, pretrained=True, base=True, device="cuda")
 
-# Create new wav
-# run new speaker_dict for every new wav
-speaker_dict = anonymizer.get_random_speaker()
-wav = anonymizer.interpolate(
-    input_wav_path,
-    speaker_dict=speaker_dict,
-    topk=4,  # K for k-NN
-    chunksize=5,  # 5 sec for one chunk
-    padding=0.5,  # pad 0.5 sec for head and tail each chunk
-)
+        logging.info("Adding speakers to anonymizer")
+        for file in assets_path.glob("*.pack"):
+            print(file.stem)
+            anonymizer.add_speaker(name=file.stem, preprocessed_file=file)
+
+        # pickle anonymizer
+        with open("anonymizer.pkl", "wb") as f:
+            pickle.dump(anonymizer, f)
+
+    else:
+        logging.info("Loading anonymizer from pickle")
+        with open("anonymizer.pkl", "rb") as f:
+            anonymizer = pickle.load(f)
+    
+    return anonymizer
 
 
-write(filename="test.wav", rate=16000, data=wav.cpu().numpy())
+def anonymize(task_name, dataset_name, model):
+    output_dir = f"./data/{task_name}/{dataset_name}/audiofiles_anonymized"
+    os.makedirs(output_dir, exist_ok=True)
+    files = glob.glob(f"./data/{task_name}/{dataset_name}/audiofiles/*.wav")
+    for audiofile in tqdm(files, total=len(files)):
+        speaker_dict = model.get_random_speaker()
+        wav = model.interpolate(
+            audiofile,
+            speaker_dict=speaker_dict,
+            topk=4,  # K for k-NN
+            chunksize=5,  # 5 sec for one chunk
+            padding=0.5,  # pad 0.5 sec for head and tail each chunk
+        )
+
+        new_audiofile_path = f"{output_dir}/{Path(audiofile).stem}.wav"
+        write(filename=new_audiofile_path, rate=16000, data=wav.cpu().numpy())
+
+if __name__ == "__main__":
+    main()
