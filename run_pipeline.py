@@ -8,9 +8,9 @@ import wandb
 
 def main():
     tasks = [
-        "age_recognition",
+        # "age_recognition",
         "gender_recognition",
-        "emotion_recognition",
+        # "emotion_recognition",
     ]
 
     for task in tasks:
@@ -19,7 +19,6 @@ def main():
 
 
 def run(config_path):
-
     with open(config_path, "r") as file:
         config = json.load(file)
     task = config["task"]
@@ -29,7 +28,12 @@ def run(config_path):
         model = load_model()
         anonymize(task, dataset_name, model)
 
-    get_metadata(task=task, dataset_name=dataset_name)
+    get_metadata(
+        task=task,
+        dataset_name=dataset_name,
+        label_column_name=config["label_column_name"],
+        undersampling=config["undersampling"],
+    )
 
     train(config, train_on="normal")
     wandb.finish()

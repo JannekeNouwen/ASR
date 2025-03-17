@@ -11,9 +11,7 @@ import torch
 from datasets import Audio, Dataset, DatasetDict, load_dataset, load_from_disk
 from sklearn.metrics import mean_squared_error, precision_recall_fscore_support
 from tqdm import tqdm
-from transformers import (AutoFeatureExtractor,
-                          AutoModelForAudioClassification, Trainer,
-                          TrainingArguments)
+from transformers import AutoFeatureExtractor, AutoModelForAudioClassification, Trainer, TrainingArguments
 
 import wandb
 

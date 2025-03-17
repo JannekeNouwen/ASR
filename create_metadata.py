@@ -5,16 +5,27 @@ import json
 import os
 
 
-def main():
-    config_path = "ASR/configs/emotion_recognition.json"
-    with open(config_path, "r") as file:
-        config = json.load(file)
-    get_metadata(config)
+# def main():
+#     config_path = "ASR/configs/emotion_recognition.json"
+#     with open(config_path, "r") as file:
+#         config = json.load(file)
+#     get_metadata(config)
 
 
-def get_metadata(task: str, dataset_name: str):
+def get_metadata(task: str, dataset_name: str, label_column_name: str, undersampling = False):
     audiofiles_dir = f"./data/{task}/{dataset_name}/audiofiles/*.wav"
     metadata = DATASET_TO_FUNC[dataset_name](audiofiles_dir)
+
+    if undersampling:
+        lowest_value = metadata[label_column_name].value_counts().idxmin()
+        smallest_subset = metadata.loc[metadata[label_column_name] == lowest_value, :]
+        number_of_samples = len(smallest_subset)
+        subset_list = []
+        for label in metadata[label_column_name].unique():
+            subset = metadata.loc[metadata[label_column_name] == label, :]
+            subset_list.append(subset.sample(n=number_of_samples, replace=False))
+        metadata = pd.concat(subset_list)
+
     metadata.to_csv(f"./data/{task}/{dataset_name}/metadata.csv")
 
 
@@ -138,5 +149,5 @@ def get_bvc_multiple_sentences_metadata(bvc_multiple_sentences_dir: str, annotat
 
 DATASET_TO_FUNC = {"crema_d": get_crema_metadata, "naomi": get_naomis_metadata, "bvc_one_sentence": get_bvc_one_sentence_metadata, "bvc_multiple_sentences": get_bvc_multiple_sentences_metadata}
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
