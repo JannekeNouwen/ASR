@@ -6,10 +6,13 @@ import os
 
 
 # def main():
-#     config_path = "ASR/configs/emotion_recognition.json"
+#     config_path = "ASR/configs/accent_recognition.json"
 #     with open(config_path, "r") as file:
 #         config = json.load(file)
-#     get_metadata(config)
+#     task = config["task"]
+#     dataset_name = config["dataset_name"]
+#     label_column_name = config["label_column_name"]
+#     get_metadata(task=task, dataset_name=dataset_name,label_column_name=label_column_name,undersampling=True)
 
 
 def get_metadata(task: str, dataset_name: str, label_column_name: str, undersampling = False):
@@ -26,6 +29,20 @@ def get_metadata(task: str, dataset_name: str, label_column_name: str, undersamp
             subset_list.append(subset.sample(n=number_of_samples, replace=False))
         metadata = pd.concat(subset_list)
 
+        # Remove files not used in sampling
+        files = glob.glob(os.path.abspath(audiofiles_dir))
+        pwd = files[0].split('/data/')[0]
+        list_audiopaths = list(metadata['audio_path'].apply(lambda x: ''.join([pwd,x[1:]])))
+        for file in files:
+            if not file in list_audiopaths:
+                os.remove(file)
+
+        anon_files = glob.glob(os.path.abspath(audiofiles_dir.replace("audiofiles", "audiofiles_anonymized")))
+        for file in anon_files:
+            if not file in list([i.replace("audiofiles", "audiofiles_anonymized") for i in list_audiopaths]):
+                os.remove(file)
+
+    metadata=metadata.sort_values("speaker")
     metadata.to_csv(f"./data/{task}/{dataset_name}/metadata.csv")
 
 
@@ -51,9 +68,18 @@ def get_crema_metadata(crema_dir: str, annotation_file: str = None) -> pd.DataFr
     return pd.DataFrame(data)
 
 
-def get_naomis_metadata(naomis_dir: str, annotation_file: str) -> pd.DataFrame:
-    files = glob.glob(naomis_dir)
-    # TODO(Naomi): Write a function to parse the accents dataset to get the metadata
+def get_accent_metadata(accent_dir: str) -> pd.DataFrame:
+    files = glob.glob(accent_dir)
+    unique_accents = {}
+    data = []
+    for file in files:
+        speaker, accent,_ = file.split("/")[-1].split('_')
+        if accent not in unique_accents:
+            unique_accents[accent] = len(unique_accents)
+        data.append({"speaker":speaker,'accent':accent, 'label_id':unique_accents[accent],'audio_path':file})
+
+    metadata = pd.DataFrame(data)
+    return metadata.sort_values("speaker")
 
 
 def get_bvc_one_sentence_metadata(bvc_one_sentence_dir: str, annotation_file: str = f"ASR/configs/bvc_annotation.csv") -> pd.DataFrame:
@@ -147,7 +173,7 @@ def get_bvc_multiple_sentences_metadata(bvc_multiple_sentences_dir: str, annotat
 
     return metadata.sort_values("speaker")
 
-DATASET_TO_FUNC = {"crema_d": get_crema_metadata, "naomi": get_naomis_metadata, "bvc_one_sentence": get_bvc_one_sentence_metadata, "bvc_multiple_sentences": get_bvc_multiple_sentences_metadata}
+DATASET_TO_FUNC = {"crema_d": get_crema_metadata, "speech_accent_archive": get_accent_metadata, "bvc_one_sentence": get_bvc_one_sentence_metadata, "bvc_multiple_sentences": get_bvc_multiple_sentences_metadata}
 
 # if __name__ == "__main__":
 #     main()

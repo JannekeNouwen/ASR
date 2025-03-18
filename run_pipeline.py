@@ -9,8 +9,9 @@ import wandb
 def main():
     tasks = [
         # "age_recognition",
-        "gender_recognition",
+        # "gender_recognition",
         # "emotion_recognition",
+        "accent_recognition"
     ]
 
     for task in tasks:
