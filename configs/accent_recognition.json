@@ -1,6 +1,6 @@
 {
-    "dataset_name": "bvc_multiple_sentences",
-    "task": "gender_recognition",
+    "dataset_name": "speech_accent_archive",
+    "task": "accent_recognition",
     "use_wandb": true,
     "use_cached_dataset": true,
     "batch_size": 16,

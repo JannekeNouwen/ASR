@@ -1,8 +1,10 @@
+import glob
 import logging
 import os
 import pickle
 from pathlib import Path
-import glob
+
+import numpy as np
 import torch
 from scipy.io.wavfile import write
 from tqdm import tqdm
@@ -60,7 +62,7 @@ def anonymize(task_name, dataset_name, model):
         )
 
         new_audiofile_path = f"{output_dir}/{Path(audiofile).stem}.wav"
-        write(filename=new_audiofile_path, rate=16000, data=wav.cpu().numpy())
+        write(filename=new_audiofile_path, rate=16000, data=np.nan_to_num(wav.cpu().numpy()) )
 
 if __name__ == "__main__":
     main()

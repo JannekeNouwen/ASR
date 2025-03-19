@@ -51,6 +51,33 @@ else
     exit 1
 fi
 
+
+# setup for accent recognition
+url="https://www.kaggle.com/datasets/rtatman/speech-accent-archive"
+#mkdir -p data/accent_recognition/speech_accent_archive/audiofiles_original
+mkdir -p data/accent_recognition/speech_accent_archive/audiofiles
+#echo "Please download the dataset from: $url and place the unzipped audiofiles in $(pwd)/data/accent_recognition/speech_accent_archive/audiofiles"
+#read -p "Have you downloaded the dataset? (y/n): " response
+#
+#if [[ "$response" == "y" || "$response" == "Y" ]]; then
+#    echo "Well done!"
+#else
+#    echo "Please download the dataset before continuing."
+#    exit 1
+#fi
+
+
+url="https://www.kaggle.com/datasets/naomideenen/sliced-data/data"
+echo "Please download the dataset from: $url and place the unzipped audiofiles in $(pwd)/data/accent_recognition/speech_accent_archive/audiofiles"
+read -p "Have you downloaded the dataset? (y/n): " response
+
+if [[ "$response" == "y" || "$response" == "Y" ]]; then
+    echo "Well done!"
+else
+    echo "Please download the dataset before continuing."
+    exit 1
+fi
+
 echo "Setup complete"
 p=$(pwd)
 printf 'Please copy and paste the following line to the file ~/.bashrc (nano ~/.bashrc): \n export PYTHONPATH="$PYTHONPATH:%s/SALT"\n' "$p"
