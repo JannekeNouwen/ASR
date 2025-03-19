@@ -19,10 +19,11 @@ def get_metadata(task: str, dataset_name: str, label_column_name: str, undersamp
     audiofiles_dir = f"./data/{task}/{dataset_name}/audiofiles/*.wav"
     metadata = DATASET_TO_FUNC[dataset_name](audiofiles_dir)
 
-    if undersampling:
+    if undersampling and len(set(metadata[label_column_name].value_counts())) > 1:
         lowest_value = metadata[label_column_name].value_counts().idxmin()
         smallest_subset = metadata.loc[metadata[label_column_name] == lowest_value, :]
         number_of_samples = len(smallest_subset)
+
         subset_list = []
         for label in metadata[label_column_name].unique():
             subset = metadata.loc[metadata[label_column_name] == label, :]
@@ -42,7 +43,6 @@ def get_metadata(task: str, dataset_name: str, label_column_name: str, undersamp
             if not file in list([i.replace("audiofiles", "audiofiles_anonymized") for i in list_audiopaths]):
                 os.remove(file)
 
-    metadata=metadata.sort_values("speaker")
     metadata.to_csv(f"./data/{task}/{dataset_name}/metadata.csv")
 
 
@@ -63,6 +63,7 @@ def get_crema_metadata(crema_dir: str, annotation_file: str = None) -> pd.DataFr
                 "emotion_level": emotion_level,
                 "sentence": sentence,
                 "label_id": unique_emotions[emotion],
+                "audio_path": file
             }
         )
     return pd.DataFrame(data)
@@ -153,7 +154,7 @@ def get_bvc_multiple_sentences_metadata(bvc_multiple_sentences_dir: str, annotat
                         "speaker": audio_id,
                         "gender": gender,
                         "sentence_index": sentence_index,
-                        "gender": unique_genders[gender],
+                        "label_id": unique_genders[gender],
                         "age": int(age),
                         "audio_path": f"{audio_path.split('VE')[0]}VE{sentence_index}.wav"
                     }

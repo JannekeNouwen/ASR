@@ -8,6 +8,6 @@
     "learning_rate": 3e-5,
     "match_metadata_on_filename": true,
     "regression": false,
-    "label_column_name": "accent",
+    "label_column_name": "label_id",
     "undersampling": true
 }

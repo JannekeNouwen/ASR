@@ -81,8 +81,8 @@ def train(config: dict, train_on: str) -> None:
         logging.info(f"Loading model for regression.")
         model = load_model(num_labels=1)
     else:
-        logging.info(f"Loading model with {num_labels} output classes.")
         num_labels = len(metadata["label_id"].unique())
+        logging.info(f"Loading model with {num_labels} output classes.")
         model = load_model(num_labels=num_labels)
 
     date_str = datetime.today().strftime("%Y-%m-%d-%H.%M")
@@ -161,7 +161,6 @@ def load_data(
 ) -> tuple[pd.DataFrame, Dataset]:
     dataset = load_dataset(audiofiles_dir, name="default", split="train")
     anon_dataset = load_dataset(audiofiles_dir + "_anonymized", name="default", split="train")
-
     # if match_metadata_on_filename:
     #     dataset = dataset.add_column(label_column_name, metadata[label_column_name])
     #     anon_dataset = anon_dataset.add_column(label_column_name, [0]*len(anon_dataset))
