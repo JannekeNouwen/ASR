@@ -82,6 +82,29 @@ def get_accent_metadata(accent_dir: str) -> pd.DataFrame:
     metadata = pd.DataFrame(data)
     return metadata.sort_values("speaker")
 
+def preprocess_age(data):
+    bins = [13, 18, 22, 26, 100]  # Boundaries based on initial distribution
+    labels = ["14-18", "19-22", "23-26", "27+"]
+    data['age_group'] = pd.cut(data['age'], bins=bins, labels=labels, right=True)
+    
+    # Remove any NaN age groups (caused by missing values)
+    data = data.dropna(subset=['age_group'])
+    
+    # Determine the target sample size per group (based on the max count)
+    target_size = data['age_group'].value_counts().max()
+    
+    # Function to safely sample data without errors
+    def safe_sample(x):
+        if len(x) == 0:  # If the group is empty, return it as is
+            return x
+        return x.sample(n=min(len(x), target_size), replace=(len(x) < target_size))
+    
+    # Balance the dataset using oversampling/undersampling
+    balanced_data = data.groupby('age_group', group_keys=False).apply(safe_sample)
+    
+    # Reset index
+    balanced_data = balanced_data.reset_index(drop=True)
+    return balanced_data
 
 def get_bvc_one_sentence_metadata(bvc_one_sentence_dir: str, annotation_file: str = f"ASR/configs/bvc_annotation.csv") -> pd.DataFrame:
     files = glob.glob(os.path.abspath(bvc_one_sentence_dir))
@@ -92,6 +115,7 @@ def get_bvc_one_sentence_metadata(bvc_one_sentence_dir: str, annotation_file: st
     annotation_file = pd.read_csv(annotation_file)
     for i, row in annotation_file.iterrows():
         gender = row["Sex"]
+        age = row["Age"]
         audio_id = row["New_ID"]
 
         if gender not in unique_genders:
@@ -107,12 +131,16 @@ def get_bvc_one_sentence_metadata(bvc_one_sentence_dir: str, annotation_file: st
                     "speaker": audio_id,
                     "gender": gender,
                     "label_id": unique_genders[gender],
+                    "age": int(age),
                     "audio_path": audio_path
                 }
             )
         else:
             print(f"Audio path {audio_path} not found.")
     metadata = pd.DataFrame(data)
+
+    # preprocess age
+    metadata = preprocess_age(metadata)
 
     files = glob.glob(os.path.abspath(bvc_one_sentence_dir))
     for file in files:
@@ -161,6 +189,9 @@ def get_bvc_multiple_sentences_metadata(bvc_multiple_sentences_dir: str, annotat
                 )
     
     metadata = pd.DataFrame(data)
+
+    # preprocess age
+    metadata = preprocess_age(metadata)
 
     files = glob.glob(os.path.abspath(bvc_multiple_sentences_dir))
     for file in files:
