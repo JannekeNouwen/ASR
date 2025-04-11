@@ -1,5 +1,5 @@
 {
-    "dataset_name": "bvc_multiple_sentences",
+    "dataset_name": "speech_accent_archive",
     "task": "age_recognition",
     "use_wandb": true,
     "use_cached_dataset": false,
