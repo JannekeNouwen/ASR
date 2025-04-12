@@ -2,7 +2,7 @@
     "dataset_name": "crema_d",
     "task": "emotion_recognition",
     "use_wandb": true,
-    "use_cached_dataset": true,
+    "use_cached_dataset": false,
     "batch_size": 16,
     "epochs": 10,
     "learning_rate": 3e-5,

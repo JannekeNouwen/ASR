@@ -23,7 +23,37 @@ torch.manual_seed(42)
 logging.basicConfig(level=logging.INFO)
 
 
-def train(config: dict, train_on: str) -> None:
+def prepare_data(config):
+    dataset_name = config["dataset_name"]
+    task = config["task"]
+    match_metadata_on_filename = config["match_metadata_on_filename"]
+    label_column_name = config["label_column_name"]
+    
+    logging.info("Loading dataset from audiofiles and metadata.")
+    os.makedirs(f"./models/{task}", exist_ok=True)
+
+    metadata = pd.read_csv(f"./data/{task}/{dataset_name}/metadata.csv")
+
+    metadata, dataset, anon_dataset = load_data(
+        f"./data/{task}/{dataset_name}/audiofiles",
+        metadata=metadata,
+        label_column_name=label_column_name,
+        speaker_column_name="speaker",
+        match_metadata_on_filename=match_metadata_on_filename
+    )
+
+    unique_speakers = metadata["speaker"].unique()
+
+    logging.info(f"Making train/test split.")
+    dataset, anon_dataset = make_train_test_split(
+        dataset, anon_dataset, unique_speakers, dataset_name=dataset_name, task=task, split_ratio=0.8
+    )
+
+    return metadata
+
+
+
+def train(config: dict, train_on: str, repetition: int, metadata: pd.DataFrame) -> None:
     """Train a wav2vec model for classification or regression.
 
     Args:
@@ -34,44 +64,23 @@ def train(config: dict, train_on: str) -> None:
     dataset_name = config["dataset_name"]
     task = config["task"]
     use_wandb = config["use_wandb"]
-    use_cached_dataset = config["use_cached_dataset"]
-    match_metadata_on_filename = config["match_metadata_on_filename"]
     regression = config["regression"]
     label_column_name = config["label_column_name"]
 
     print(f"Running training for task {task} ({train_on}) with dataset {dataset_name}")
 
-    metadata = pd.read_csv(f"./data/{task}/{dataset_name}/metadata.csv")
-    if use_cached_dataset:
-        logging.info("Loading cached dataset.")
-        train_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_normal_train.hf")
-        test_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_normal_test.hf")
-        dataset = DatasetDict({"train": train_dataset, "test": test_dataset})
+    logging.info("Loading cached dataset.")
+    train_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_normal_train.hf")
+    test_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_normal_test.hf")
+    dataset = DatasetDict({"train": train_dataset, "test": test_dataset})
 
-        logging.info("Loading cached dataset.")
-        anon_train_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_anonymized_train.hf")
-        anon_test_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_anonymized_test.hf")
-        anon_dataset = DatasetDict({"train": anon_train_dataset, "test": anon_test_dataset})
-    else:
-        logging.info("Loading dataset from audiofiles and metadata.")
-        os.makedirs(f"./models/{task}", exist_ok=True)
+    logging.info("Loading cached dataset.")
+    anon_train_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_anonymized_train.hf")
+    anon_test_dataset = load_from_disk(f"./data/{task}/{dataset_name}/{dataset_name}_anonymized_test.hf")
+    anon_dataset = DatasetDict({"train": anon_train_dataset, "test": anon_test_dataset})
 
-        metadata, dataset, anon_dataset = load_data(
-            f"./data/{task}/{dataset_name}/audiofiles",
-            metadata=metadata,
-            label_column_name=label_column_name,
-            speaker_column_name="speaker",
-            match_metadata_on_filename=match_metadata_on_filename
-        )
-
-        unique_speakers = metadata["speaker"].unique()
-
-        logging.info(f"Making train/test split.")
-        dataset, anon_dataset = make_train_test_split(
-            dataset, anon_dataset, unique_speakers, dataset_name=dataset_name, task=task, split_ratio=0.8
-        )
-        print(f"Number of training examples: {len(dataset['train'])}")
-        print(f"Number of testing examples: {len(dataset['test'])}")
+    print(f"Number of training examples: {len(dataset['train'])}")
+    print(f"Number of testing examples: {len(dataset['test'])}")
 
     logging.info(f"Extracting features.")
     encoded_dataset, feature_extractor = preprocess_dataset(dataset, label_column_name)
@@ -88,8 +97,8 @@ def train(config: dict, train_on: str) -> None:
     date_str = datetime.today().strftime("%Y-%m-%d-%H.%M")
 
     logging.info(f"Loading trainer.")
-    model_name = f"{task}-{dataset_name}-{train_on}-{date_str}"
-    model_dir = f"./models/{task}/{model_name}"
+    model_name = f"{task}-{dataset_name}-{train_on}-{repetition}-{date_str}"
+    model_dir = f"./models/{task}/{repetition}/{model_name}"
     os.makedirs(model_dir)
 
     if train_on == "normal":
@@ -119,41 +128,45 @@ def train(config: dict, train_on: str) -> None:
             learning_rate=config["learning_rate"],
         )
 
-    evaluate_model(trainer=trainer, encoded_dataset=encoded_dataset, model_name=model_name, task=task)
+    evaluate_model(trainer=trainer, encoded_dataset=encoded_dataset, model_name=model_name, task=task, repetition=repetition)
     evaluate_model(
-        trainer=trainer, encoded_dataset=anon_encoded_dataset, model_name=model_name, task=task, anonymized=True
+        trainer=trainer, encoded_dataset=anon_encoded_dataset, model_name=model_name, task=task, repetition=repetition, anonymized=True
     )
 
     logging.info(f"Training model.")
     trainer.train()
 
-    evaluate_model(trainer=trainer, encoded_dataset=encoded_dataset, model_name=model_name, task=task)
-    evaluate_model(
-        trainer=trainer, encoded_dataset=anon_encoded_dataset, model_name=model_name, task=task, anonymized=True
+    normal_train_output, normal_test_output = evaluate_model(trainer=trainer, encoded_dataset=encoded_dataset, model_name=model_name, task=task, repetition=repetition)
+    anon_train_output, anon_test_output = evaluate_model(
+        trainer=trainer, encoded_dataset=anon_encoded_dataset, model_name=model_name, task=task, repetition=repetition, anonymized=True
     )
 
-    logging.info(f"Saving model")
-    trainer.save_model(f"./models/{task}")
+    logging.info(msg=f"Saving model")
+    trainer.save_model(f"./models/{task}/{repetition}")
+
+    return normal_train_output, normal_test_output, anon_train_output, anon_test_output
 
 
-def evaluate_model(trainer: Trainer, encoded_dataset, model_name, task, anonymized=False):
+def evaluate_model(trainer: Trainer, encoded_dataset, model_name, task, repetition, anonymized=False):
     logging.info(f"Performing evaluation on train set.")
-    output = trainer.evaluate(eval_dataset=encoded_dataset["train"], metric_key_prefix=f"train/{'anonymized' if anonymized else 'normal'}")
-    logging.info(f"Evaluation on train set: {output}")
+    train_output = trainer.evaluate(eval_dataset=encoded_dataset["train"], metric_key_prefix=f"train/{'anonymized' if anonymized else 'normal'}")
+    logging.info(f"Evaluation on train set: {train_output}")
     with open(
-        f"./models/{task}/{model_name}/train_set_metrics_{model_name}_on_train_set_{'anonymized' if anonymized else 'normal'}.json",
+        f"./models/{task}/{repetition}/{model_name}/train_set_metrics_{model_name}_on_train_set_{'anonymized' if anonymized else 'normal'}.json",
         "w",
     ) as file:
-        json.dump(output, file, indent=4)
+        json.dump(train_output, file, indent=4)
 
     logging.info(f"Performing evaluation on test set.")
-    output = trainer.evaluate(eval_dataset=encoded_dataset["test"], metric_key_prefix=f"eval/{'anonymized' if anonymized else 'normal'}")
-    logging.info(f"Evaluation on test set: {output}")
+    test_output = trainer.evaluate(eval_dataset=encoded_dataset["test"], metric_key_prefix=f"eval/{'anonymized' if anonymized else 'normal'}")
+    logging.info(f"Evaluation on test set: {test_output}")
     with open(
-        f"./models/{task}/{model_name}/test_set_metrics_{model_name}_on_test_set_{'anonymized' if anonymized else 'normal'}.json",
+        f"./models/{task}/{repetition}/{model_name}/test_set_metrics_{model_name}_on_test_set_{'anonymized' if anonymized else 'normal'}.json",
         "w",
     ) as file:
-        json.dump(output, file, indent=4)
+        json.dump(test_output, file, indent=4)
+    
+    return train_output, test_output
 
 
 def load_data(
@@ -325,6 +338,3 @@ def get_trainer(
         tokenizer=feature_extractor,
     )
 
-
-if __name__ == "__main__":
-    train()

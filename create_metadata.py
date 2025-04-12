@@ -17,7 +17,7 @@ def main():
 
 def get_metadata(task: str, dataset_name: str, label_column_name: str, undersampling=False):
     audiofiles_dir = f"./data/{task}/{dataset_name}/audiofiles/*.wav"
-    kwargs = {"label_column_name": "age"} if "age" in task else {}
+    kwargs = {"task": task} if "age" in task else {}
     metadata = DATASET_TO_FUNC[dataset_name](audiofiles_dir, **kwargs)
 
     if undersampling and len(set(metadata[label_column_name].value_counts())) > 1:
@@ -34,7 +34,9 @@ def get_metadata(task: str, dataset_name: str, label_column_name: str, undersamp
         # Remove files not used in sampling
         files = glob.glob(os.path.abspath(audiofiles_dir))
         pwd = files[0].split("/data/")[0]
-        list_audiopaths = list(metadata["audio_path"].apply(lambda x: "".join([pwd, x[1:]])))
+        list_audiopaths = list(metadata["audio_path"])
+        if not list_audiopaths[0].startswith("/"):
+            list_audiopaths = list(metadata["audio_path"].apply(lambda x: "".join([pwd, x[1:]])))
         for file in files:
             if not file in list_audiopaths:
                 os.remove(file)
@@ -71,20 +73,24 @@ def get_crema_metadata(crema_dir: str, annotation_file: str = None) -> pd.DataFr
 
 
 def get_accent_metadata(
-    accent_dir: str, label_column_name: str, annotation_file: str = f"ASR/configs/speakers_all.csv"
+    accent_dir: str, task: str, annotation_file: str = f"ASR/configs/speakers_all.csv"
 ) -> pd.DataFrame:
     files = glob.glob(accent_dir)
     data = []
 
-    if label_column_name == "age":
+    if task == "age_recognition":
         all_speakers_labels = pd.read_csv(annotation_file)
         for file in files:
             speaker, accent, _ = file.split("/")[-1].split("_")
-            age = all_speakers_labels[all_speakers_labels["filename"] == speaker]["age"].values[0]
+            if "english" in speaker:
 
-            data.append({"speaker": speaker, "age": age, "audio_path": file})
+                age = all_speakers_labels[all_speakers_labels["filename"] == speaker]["age"].values[0]
+                data.append({"speaker": speaker, "age": age, "audio_path": file})
 
-        preprocess_age(data)
+        metadata = pd.DataFrame(data)
+
+        metadata = preprocess_age(metadata)
+        metadata["label_id"] = metadata.groupby(["age"]).ngroup()
 
     else:
         unique_accents = {}
@@ -94,13 +100,13 @@ def get_accent_metadata(
                 unique_accents[accent] = len(unique_accents)
             data.append({"speaker": speaker, "accent": accent, "label_id": unique_accents[accent], "audio_path": file})
 
-    metadata = pd.DataFrame(data)
+        metadata = pd.DataFrame(data)
     return metadata.sort_values("speaker")
 
 
 def preprocess_age(data):
-    bins = [4, 21, 25, 30, 45, 100]  # Boundaries based on initial distribution
-    labels = ["5-21", "22-25", "26-30", "30-45", "45+"]
+    bins = [4, 25, 45, 100]  # Boundaries based on initial distribution
+    labels = ["5-25", "26-45", "45+"]
     data["age"] = pd.cut(data["age"], bins=bins, labels=labels, right=True)
 
     # Remove any NaN age groups (caused by missing values)
@@ -115,8 +121,8 @@ def preprocess_age(data):
             return x
         return x.sample(n=min(len(x), target_size), replace=(len(x) < target_size))
 
-    # add column "label_id" with the index for the labeks
-    data["label_id"] = pd.factorize(data["age"])[0]
+    # # add column "label_id" with the index for the labeks
+    # data["label_id"] = pd.factorize(data["age"])[0]
     return data
 
 
@@ -156,7 +162,7 @@ def get_bvc_one_sentence_metadata(
     metadata = pd.DataFrame(data)
 
     # preprocess age
-    metadata = preprocess_age(metadata)
+    # metadata = preprocess_age(metadata)
 
     files = glob.glob(os.path.abspath(bvc_one_sentence_dir))
     for file in files:
@@ -209,7 +215,7 @@ def get_bvc_multiple_sentences_metadata(
     metadata = pd.DataFrame(data)
 
     # preprocess age
-    metadata = preprocess_age(metadata)
+    # metadata = preprocess_age(metadata)
 
     files = glob.glob(os.path.abspath(bvc_multiple_sentences_dir))
     for file in files:
