@@ -1,5 +1,5 @@
 {
-    "dataset_name": "bvc_multiple_sentences",
+    "dataset_name": "speech_accent_archive",
     "task": "age_recognition",
     "use_wandb": true,
     "use_cached_dataset": false,
@@ -7,7 +7,7 @@
     "epochs": 10,
     "learning_rate": 3e-5,
     "match_metadata_on_filename": true,
-    "regression": true,
-    "label_column_name": "age",
+    "regression": false,
+    "label_column_name": "label_id",
     "undersampling": true
 }
