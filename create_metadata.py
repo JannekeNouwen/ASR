@@ -105,8 +105,8 @@ def get_accent_metadata(
 
 
 def preprocess_age(data):
-    bins = [4, 25, 45, 100]  # Boundaries based on initial distribution
-    labels = ["5-25", "26-45", "45+"]
+    bins = [4, 25, 100]  # Boundaries based on initial distribution
+    labels = ["5-25","45+"]
     data["age"] = pd.cut(data["age"], bins=bins, labels=labels, right=True)
 
     # Remove any NaN age groups (caused by missing values)
