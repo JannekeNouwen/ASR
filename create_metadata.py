@@ -5,20 +5,19 @@ import json
 import os
 
 
-def main():
-    config_path = "ASR/configs/age_recognition.json"
-    with open(config_path, "r") as file:
-        config = json.load(file)
-    task = config["task"]
-    dataset_name = config["dataset_name"]
-    label_column_name = config["label_column_name"]
-    get_metadata(task=task, dataset_name=dataset_name, label_column_name=label_column_name, undersampling=True)
+# def main():
+#     config_path = "ASR/configs/accent_recognition.json"
+#     with open(config_path, "r") as file:
+#         config = json.load(file)
+#     task = config["task"]
+#     dataset_name = config["dataset_name"]
+#     label_column_name = config["label_column_name"]
+#     get_metadata(task=task, dataset_name=dataset_name,label_column_name=label_column_name,undersampling=True)
 
 
-def get_metadata(task: str, dataset_name: str, label_column_name: str, undersampling=False):
+def get_metadata(task: str, dataset_name: str, label_column_name: str, undersampling = False):
     audiofiles_dir = f"./data/{task}/{dataset_name}/audiofiles/*.wav"
-    kwargs = {"task": task} if "age" in task else {}
-    metadata = DATASET_TO_FUNC[dataset_name](audiofiles_dir, **kwargs)
+    metadata = DATASET_TO_FUNC[dataset_name](audiofiles_dir)
 
     if undersampling and len(set(metadata[label_column_name].value_counts())) > 1:
         lowest_value = metadata[label_column_name].value_counts().idxmin()
@@ -33,10 +32,8 @@ def get_metadata(task: str, dataset_name: str, label_column_name: str, undersamp
 
         # Remove files not used in sampling
         files = glob.glob(os.path.abspath(audiofiles_dir))
-        pwd = files[0].split("/data/")[0]
-        list_audiopaths = list(metadata["audio_path"])
-        if not list_audiopaths[0].startswith("/"):
-            list_audiopaths = list(metadata["audio_path"].apply(lambda x: "".join([pwd, x[1:]])))
+        pwd = files[0].split('/data/')[0]
+        list_audiopaths = list(metadata['audio_path'].apply(lambda x: ''.join([pwd,x[1:]])))
         for file in files:
             if not file in list_audiopaths:
                 os.remove(file)
@@ -66,69 +63,27 @@ def get_crema_metadata(crema_dir: str, annotation_file: str = None) -> pd.DataFr
                 "emotion_level": emotion_level,
                 "sentence": sentence,
                 "label_id": unique_emotions[emotion],
-                "audio_path": file,
+                "audio_path": file
             }
         )
     return pd.DataFrame(data)
 
 
-def get_accent_metadata(
-    accent_dir: str, task: str, annotation_file: str = f"ASR/configs/speakers_all.csv"
-) -> pd.DataFrame:
+def get_accent_metadata(accent_dir: str) -> pd.DataFrame:
     files = glob.glob(accent_dir)
+    unique_accents = {}
     data = []
+    for file in files:
+        speaker, accent,_ = file.split("/")[-1].split('_')
+        if accent not in unique_accents:
+            unique_accents[accent] = len(unique_accents)
+        data.append({"speaker":speaker,'accent':accent, 'label_id':unique_accents[accent],'audio_path':file})
 
-    if task == "age_recognition":
-        all_speakers_labels = pd.read_csv(annotation_file)
-        for file in files:
-            speaker, accent, _ = file.split("/")[-1].split("_")
-            if "english" in speaker:
-
-                age = all_speakers_labels[all_speakers_labels["filename"] == speaker]["age"].values[0]
-                data.append({"speaker": speaker, "age": age, "audio_path": file})
-
-        metadata = pd.DataFrame(data)
-
-        metadata = preprocess_age(metadata)
-        metadata["label_id"] = metadata.groupby(["age"]).ngroup()
-
-    else:
-        unique_accents = {}
-        for file in files:
-            speaker, accent, _ = file.split("/")[-1].split("_")
-            if accent not in unique_accents:
-                unique_accents[accent] = len(unique_accents)
-            data.append({"speaker": speaker, "accent": accent, "label_id": unique_accents[accent], "audio_path": file})
-
-        metadata = pd.DataFrame(data)
+    metadata = pd.DataFrame(data)
     return metadata.sort_values("speaker")
 
 
-def preprocess_age(data):
-    bins = [4, 25, 45, 100]  # Boundaries based on initial distribution
-    labels = ["5-25", "26-45", "45+"]
-    data["age"] = pd.cut(data["age"], bins=bins, labels=labels, right=True)
-
-    # Remove any NaN age groups (caused by missing values)
-    data = data.dropna(subset=["age"])
-
-    # Determine the target sample size per group (based on the max count)
-    target_size = data["age"].value_counts().max()
-
-    # Function to safely sample data without errors
-    def safe_sample(x):
-        if len(x) == 0:  # If the group is empty, return it as is
-            return x
-        return x.sample(n=min(len(x), target_size), replace=(len(x) < target_size))
-
-    # # add column "label_id" with the index for the labeks
-    # data["label_id"] = pd.factorize(data["age"])[0]
-    return data
-
-
-def get_bvc_one_sentence_metadata(
-    bvc_one_sentence_dir: str, annotation_file: str = f"ASR/configs/bvc_annotation.csv"
-) -> pd.DataFrame:
+def get_bvc_one_sentence_metadata(bvc_one_sentence_dir: str, annotation_file: str = f"ASR/configs/bvc_annotation.csv") -> pd.DataFrame:
     files = glob.glob(os.path.abspath(bvc_one_sentence_dir))
     id_to_filename = {int(file.split("/")[-1].split("_")[2]): file for file in files if "VE" in file.split("/")[-1]}
     data = []
@@ -137,7 +92,6 @@ def get_bvc_one_sentence_metadata(
     annotation_file = pd.read_csv(annotation_file)
     for i, row in annotation_file.iterrows():
         gender = row["Sex"]
-        age = row["Age"]
         audio_id = row["New_ID"]
 
         if gender not in unique_genders:
@@ -153,16 +107,12 @@ def get_bvc_one_sentence_metadata(
                     "speaker": audio_id,
                     "gender": gender,
                     "label_id": unique_genders[gender],
-                    "age": int(age),
-                    "audio_path": audio_path,
+                    "audio_path": audio_path
                 }
             )
         else:
             print(f"Audio path {audio_path} not found.")
     metadata = pd.DataFrame(data)
-
-    # preprocess age
-    # metadata = preprocess_age(metadata)
 
     files = glob.glob(os.path.abspath(bvc_one_sentence_dir))
     for file in files:
@@ -177,9 +127,7 @@ def get_bvc_one_sentence_metadata(
     return metadata.sort_values("speaker")
 
 
-def get_bvc_multiple_sentences_metadata(
-    bvc_multiple_sentences_dir: str, annotation_file: str = f"ASR/configs/bvc_annotation.csv"
-) -> pd.DataFrame:
+def get_bvc_multiple_sentences_metadata(bvc_multiple_sentences_dir: str, annotation_file: str = f"ASR/configs/bvc_annotation.csv") -> pd.DataFrame:
     files = glob.glob(os.path.abspath(bvc_multiple_sentences_dir))
     id_to_filename = {int(file.split("/")[-1].split("_")[2]): file for file in files if "VE" in file.split("/")[-1]}
     data = []
@@ -208,14 +156,11 @@ def get_bvc_multiple_sentences_metadata(
                         "sentence_index": sentence_index,
                         "label_id": unique_genders[gender],
                         "age": int(age),
-                        "audio_path": f"{audio_path.split('VE')[0]}VE{sentence_index}.wav",
+                        "audio_path": f"{audio_path.split('VE')[0]}VE{sentence_index}.wav"
                     }
                 )
-
+    
     metadata = pd.DataFrame(data)
-
-    # preprocess age
-    # metadata = preprocess_age(metadata)
 
     files = glob.glob(os.path.abspath(bvc_multiple_sentences_dir))
     for file in files:
@@ -229,13 +174,7 @@ def get_bvc_multiple_sentences_metadata(
 
     return metadata.sort_values("speaker")
 
+DATASET_TO_FUNC = {"crema_d": get_crema_metadata, "speech_accent_archive": get_accent_metadata, "bvc_one_sentence": get_bvc_one_sentence_metadata, "bvc_multiple_sentences": get_bvc_multiple_sentences_metadata}
 
-DATASET_TO_FUNC = {
-    "crema_d": get_crema_metadata,
-    "speech_accent_archive": get_accent_metadata,
-    "bvc_one_sentence": get_bvc_one_sentence_metadata,
-    "bvc_multiple_sentences": get_bvc_multiple_sentences_metadata,
-}
-
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
